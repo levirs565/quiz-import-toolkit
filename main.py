@@ -2,6 +2,7 @@ import PySimpleGUI as sg
 import cv2
 import pytesseract
 import re
+import util
 
 
 def strip_lines(list: list):
@@ -97,8 +98,7 @@ layout = [
         sg.Column(
             [
                 [
-                    sg.Image(filename="", key=key_frame,
-                             expand_y=True, expand_x=True)
+                    sg.Image(filename="", key=key_frame, expand_y=True, expand_x=True, background_color="red")
                 ]
             ],
             expand_y=True, expand_x=True
@@ -173,20 +173,7 @@ while True:
             continue
         if img_size == preview_frame_size:
             continue
-        ow, oh = orig_size
-        aspect = ow/oh
-        nw, nh = (0, 0)
-        w, h = img_size
-        new_size = None
-        if oh > ow:
-            nh = h
-            nw = round(h*aspect)
-        else:
-            print("Not implemented")
-        if min(nw, nh) != 0:
-            resized_frame = cv2.resize(frame, (nw, nh))
-            update_preview_frame(resized_frame)
-            window[key_frame].set_size((nw, nh))
+        update_preview_frame(util.image_contain(frame, img_size))
         preview_frame_size = img_size
 
 window.close()
