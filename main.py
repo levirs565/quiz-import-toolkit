@@ -3,6 +3,7 @@ import cv2
 import re
 import pytesseract
 
+
 def strip_lines(list: list):
     lines = []
     for line in list:
@@ -13,8 +14,8 @@ def strip_lines(list: list):
     return lines
 
 
-def process_text(text: str):
-    lines = strip_lines(text.splitlines())
+def process_text(raw_text: str):
+    lines = strip_lines(raw_text.splitlines())
     question_line = []
     answers = []
     is_answer = False
@@ -26,18 +27,22 @@ def process_text(text: str):
             question_line.append(line)
         if is_answer == True:
             word = re.split("\s+", line)
-            alphabet = ["a", "b", "c", "d", "e", "f"]
-            chars = [word[1][0]]
             answer_index = None
-            if word[0][-1] == ".":
-                chars.append(word[0][-2])
-            else:
-                chars.append(word[0][-1])
-            for char in chars:
-                count = alphabet.count(char)
-                if count > 0:
-                    answer_index = char
-                    break
+            first = word[0]
+            if len(first) <= 3:
+                alphabet = ["a", "b", "c", "d", "e", "f"]
+                chars = []
+                if len(word) >= 2:
+                    chars.append(word[1][0])
+                if first[-1] == ".":
+                    chars.append(first[-2])
+                else:
+                    chars.append(first[-1])
+                for char in chars:
+                    count = alphabet.count(char)
+                    if count > 0:
+                        answer_index = char
+                        break
             if answer_index is not None:
                 pos = line.find(answer_index)
                 text = ""
@@ -46,12 +51,16 @@ def process_text(text: str):
                 else:
                     text = line[pos+1:].strip()
 
-                answers.append(answer_index + ". " + text)
+                answers.append([answer_index + ". " + text])
             else:
-                print(text)
+                if len(answers) == 0:
+                    answers.append([line])
+                else:
+                    answers[-1].append(line)
 
     print(" ".join(question_line))
-    print("\n".join(answers))
+    for answer in answers:
+        print(" ".join(answer))
 
 
 win = "Frame"
