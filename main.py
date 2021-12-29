@@ -1,7 +1,7 @@
-import sys
+import PySimpleGUI as sg
 import cv2
-import re
 import pytesseract
+import re
 
 
 def strip_lines(list: list):
@@ -15,7 +15,9 @@ def strip_lines(list: list):
 
 
 def process_text(raw_text: str):
+    result = ""
     lines = strip_lines(raw_text.splitlines())
+    result += "Original text: \n" + "\n".join(lines) + "\n\n\n"
     question_line = []
     answers = []
     is_answer = False
@@ -58,55 +60,133 @@ def process_text(raw_text: str):
                 else:
                     answers[-1].append(line)
 
-    print(" ".join(question_line))
+    result += "Question: \n" + " ".join(question_line) + "\n"
     for answer in answers:
-        print(" ".join(answer))
+        result += " ".join(answer) + "\n"
+    return result
 
 
-win = "Frame"
-cv2.namedWindow(win, cv2.WINDOW_NORMAL |
-                cv2.WINDOW_KEEPRATIO | cv2.WINDOW_GUI_NORMAL)
+key_frame = "-FRAME-"
+key_processed = "-PROCESSED-"
+
+text_open = "Open"
+text_next = "Next Second"
+text_prev = "Previous Second"
+text_process = "Process"
+
+layout = [
+    [
+        sg.Column([
+
+            [
+                sg.Button(text_open),
+            ],
+            [
+                sg.Button(text_prev)
+            ],
+            [
+                sg.Button(text_process)
+            ],
+            [
+                sg.Button(text_next)
+            ],
+            [
+                sg.Multiline(key=key_processed, expand_y=True, size=(30, 0)),
+            ]
+        ], expand_y=True),
+        sg.Column(
+            [
+                [
+                    sg.Image(filename="", key=key_frame,
+                             expand_y=True, expand_x=True)
+                ]
+            ],
+            expand_y=True, expand_x=True
+        )
+    ],
+]
+
+window = sg.Window(title="Quiz Video OCR", layout=layout,
+                   margins=(0, 0), resizable=True)
+
+vid_capture = None
+frame = None
+orig_size = (0, 0)
+preview_frame_size = (0, 0)
+cv_win = "Select Region"
 
 
-vid_capture = cv2.VideoCapture(sys.argv[1])
+def update_preview_frame(frame):
+    data = cv2.imencode('.png', frame)[1].tobytes()
+    window[key_frame].update(data=data)
 
-if vid_capture.isOpened() == False:
-    print("Error opening video")
 
-fps = vid_capture.get(cv2.CAP_PROP_FPS)
-frame_count = vid_capture.get(cv2.CAP_PROP_FRAME_COUNT)
-print('FPS: ', fps, " Frame Count: ", frame_count)
-print("Press q to quit, p to process frame, n to next frame")
+def update_frame():
+    global frame
+    global preview_frame_size
+    ret, frame = vid_capture.read()
+    update_preview_frame(frame)
+    preview_frame_size = orig_size
 
-last_frame_pos = 0
-ret, frame = vid_capture.read()
-current_frame_pos = vid_capture.get(cv2.CAP_PROP_POS_FRAMES)
-while vid_capture.isOpened():
-    if not ret:
+
+def jump_frame_msec(diff):
+    current_milis = vid_capture.get(cv2.CAP_PROP_POS_MSEC)
+    vid_capture.set(cv2.CAP_PROP_POS_MSEC, current_milis + diff)
+    update_frame()
+
+
+while True:
+    event, values = window.read(timeout=20)
+
+    if event == sg.WIN_CLOSED:
         break
 
-    can_process = current_frame_pos - last_frame_pos >= fps or last_frame_pos == 0
-    if can_process:
-        cv2.imshow(win, frame)
-        key = cv2.waitKey()
+    if event == text_open:
+        print(values)
+        vid_capture = cv2.VideoCapture(sg.popup_get_file("Select Video"))
+        orig_size = (
+            vid_capture.get(cv2.CAP_PROP_FRAME_WIDTH),
+            vid_capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        update_frame()
 
-        if key == ord('q'):
-            break
-        if key == ord("p"):
-            rect = cv2.selectROI(win, frame, fromCenter=False)
-            frame = frame[rect[1]:rect[1]+rect[3], rect[0]:rect[0]+rect[2]]
+    if event == text_next:
+        jump_frame_msec(1000)
 
-            text = str(pytesseract.image_to_string(
-                frame, lang="ind+eng", config="--oem 1 --psm 6"))
-            process_text(text)
+    if event == text_prev:
+        jump_frame_msec(-1000)
+
+    if event == text_process:
+        cv2.namedWindow(cv_win, cv2.WINDOW_NORMAL |
+                        cv2.WINDOW_KEEPRATIO | cv2.WINDOW_GUI_NORMAL)
+        w, h = window.size
+        cv2.resizeWindow(cv_win, w, h)
+        rect = cv2.selectROI(cv_win, frame, fromCenter=False)
+        cv2.destroyWindow(cv_win)
+        process_frame = frame[rect[1]:rect[1]+rect[3], rect[0]:rect[0]+rect[2]]
+        text = str(pytesseract.image_to_string(
+            process_frame, lang="ind+eng", config="--oem 1 --psm 6"))
+        window[key_processed].update(process_text(text))
+
+    if frame is not None:
+        img_size = window[key_frame].get_size()
+        if img_size == (1, 1):
             continue
-        if key != ord("n"):
+        if img_size == preview_frame_size:
             continue
+        ow, oh = orig_size
+        aspect = ow/oh
+        nw, nh = (0, 0)
+        w, h = img_size
+        new_size = None
+        if oh > ow:
+            nh = h
+            nw = round(h*aspect)
+        else:
+            print("Not implemented")
+        if min(nw, nh) != 0:
+            resized_frame = cv2.resize(frame, (nw, nh))
+            update_preview_frame(resized_frame)
+            window[key_frame].set_size((nw, nh))
+        preview_frame_size = img_size
 
-        last_frame_pos = current_frame_pos
-
-    ret, frame = vid_capture.read()
-    current_frame_pos = vid_capture.get(cv2.CAP_PROP_POS_FRAMES)
-
-vid_capture.release()
-cv2.destroyAllWindows()
+window.close()
