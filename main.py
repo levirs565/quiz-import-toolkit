@@ -96,7 +96,12 @@ def open_file(sender, data):
     update_frame()
 
 
-def show_preview(texture_data):
+def show_preview():
+    data = np.flip(frame, 2)
+    data = data.ravel()
+    data = np.asfarray(data, dtype='f')
+    texture_data = np.true_divide(data, 255.0)
+
     if dpg.does_item_exist(texture_tag):
         if dpg.get_item_width(texture_tag) == orig_size[0] and dpg.get_item_height(texture_tag) == orig_size[1]:
             dpg.set_value(texture_tag, texture_data)
@@ -114,11 +119,7 @@ def update_frame():
     global frame
     global preview_frame_size
     ret, frame = vid_capture.read()
-    data = np.flip(frame, 2)
-    data = data.ravel()
-    data = np.asfarray(data, dtype='f')
-    texture_data = np.true_divide(data, 255.0)
-    show_preview(texture_data)
+    show_preview()
 
 
 def jump_frame_msec(diff):
@@ -127,12 +128,25 @@ def jump_frame_msec(diff):
     update_frame()
 
 
-def process_frame():
+def select_region():
     cv2.namedWindow(cv_win, cv2.WINDOW_NORMAL |
                     cv2.WINDOW_KEEPRATIO | cv2.WINDOW_GUI_NORMAL)
     rect = cv2.selectROI(cv_win, frame, fromCenter=False)
     cv2.destroyWindow(cv_win)
-    process_frame = frame[rect[1]:rect[1]+rect[3], rect[0]:rect[0]+rect[2]]
+    return (rect[0], rect[1], rect[0]+rect[2], rect[1]+rect[3])
+
+
+def erase_frame():
+    rect = select_region()
+    cv2.rectangle(frame, (rect[0], rect[1]),
+                  (rect[2], rect[3]), (255, 255, 255), thickness=cv2.FILLED)
+    print(rect)
+    show_preview()
+
+
+def process_frame():
+    rect = select_region()
+    process_frame = frame[rect[1]:rect[3], rect[0]:rect[2]]
     text = str(pytesseract.image_to_string(
         process_frame, lang="ind+eng", config="--oem 1 --psm 6"))
     new_text = process_text(text)
@@ -149,6 +163,7 @@ with dpg.window(label="Quiz Video OCR"):
                        callback=lambda: dpg.show_item(file_dialog_tag))
         dpg.add_button(label="Previous Second",
                        callback=lambda: jump_frame_msec(-1000))
+        dpg.add_button(label="Erase", callback=erase_frame)
         dpg.add_button(label="Process", callback=process_frame)
         dpg.add_button(label='Next Second',
                        callback=lambda: jump_frame_msec(1000))
