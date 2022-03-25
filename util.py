@@ -1,7 +1,7 @@
 import cv2
 
 
-def image_contain(img, dest_size):
+def calculate_image_contain_size(img, dest_size):
     img_h, img_w, c = img.shape
     dest_w, dest_h = dest_size
 
@@ -16,4 +16,4 @@ def image_contain(img, dest_size):
             new_width = int(img_w / img_h * dest_h)
             dest_size = (new_width, dest_h)
 
-    return cv2.resize(img, dest_size)
+    return dest_size

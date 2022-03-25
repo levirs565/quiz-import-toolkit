@@ -65,6 +65,7 @@ dpg.create_context()
 
 file_dialog_tag = "file_dialog_id"
 texture_tag = "texture_id"
+preview_tag = "preview_id"
 input_tag = "input_id"
 excluded_tag = "excluded_id"
 loading_tag = "loading_id"
@@ -73,47 +74,60 @@ texture_registry = dpg.add_texture_registry()
 
 vid_capture = None
 frame = None
-orig_size = (0, 0)
-preview_frame_size = (0, 0)
+frame_size = (0, 0)
+preview_size = (0, 0)
 cv_win = "Select Region"
 
 
 def open_file(sender, data):
     global vid_capture
-    global orig_size
+    global frame_size
+    global preview_size
 
     print(data)
     vid_capture = cv2.VideoCapture(data['file_path_name'])
-    orig_size = (
-        vid_capture.get(cv2.CAP_PROP_FRAME_WIDTH),
-        vid_capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    frame_size = (
+        int(vid_capture.get(cv2.CAP_PROP_FRAME_WIDTH)),
+        int(vid_capture.get(cv2.CAP_PROP_FRAME_HEIGHT)))
+    preview_size = frame_size
 
     update_frame()
 
 
 def show_preview():
-    data = np.flip(frame, 2)
+    preview = cv2.resize(frame, preview_size)
+    preview_pos = (0, 0)
+    data = np.flip(preview, 2)
     data = data.ravel()
     data = np.asfarray(data, dtype='f')
     texture_data = np.true_divide(data, 255.0)
 
     if dpg.does_item_exist(texture_tag):
-        if dpg.get_item_width(texture_tag) == orig_size[0] and dpg.get_item_height(texture_tag) == orig_size[1]:
+        if dpg.get_item_width(texture_tag) == preview_size[0] and dpg.get_item_height(texture_tag) == preview_size[1]:
             dpg.set_value(texture_tag, texture_data)
             return
+        preview_pos = dpg.get_item_pos(preview_tag)
         dpg.delete_item(texture_tag)
+        dpg.remove_alias(texture_tag)
+        dpg.delete_item(preview_tag)
 
     dpg.add_raw_texture(
-        orig_size[0], orig_size[1], texture_data, format=dpg.mvFormat_Float_rgb, tag=texture_tag, parent=texture_registry)
+        preview_size[0], preview_size[1], texture_data, format=dpg.mvFormat_Float_rgb, tag=texture_tag, parent=texture_registry)
 
-    with dpg.window(label="Preview"):
+    with dpg.window(label="Preview", tag=preview_tag, pos=preview_pos):
         dpg.add_image(texture_tag=texture_tag)
 
 
 def update_frame():
     global frame
-    global preview_frame_size
     ret, frame = vid_capture.read()
+    show_preview()
+
+
+def resize_preview():
+    global preview_size
+    preview_size = util.calculate_image_contain_size(
+        frame, (dpg.get_item_width(preview_tag), dpg.get_item_height(preview_tag)))
     show_preview()
 
 
@@ -168,6 +182,7 @@ with dpg.window(label="Quiz Video OCR"):
         dpg.add_button(label="Process", callback=process_frame)
         dpg.add_button(label='Next Second',
                        callback=lambda: jump_frame_msec(1000))
+        dpg.add_button(label="Resize Preview", callback=resize_preview)
     dpg.add_input_text(label="Excluded Lines",
                        multiline=True, tag=excluded_tag)
     dpg.add_input_text(label="Text", multiline=True, tag=input_tag)
@@ -181,5 +196,6 @@ dpg.create_viewport()
 
 dpg.setup_dearpygui()
 dpg.show_viewport()
+dpg.maximize_viewport()
 dpg.start_dearpygui()
 dpg.destroy_context()
