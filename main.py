@@ -2,6 +2,8 @@ import dearpygui.dearpygui as dpg
 import cv2
 import pytesseract
 import re
+
+from scipy.__config__ import show
 import util
 import numpy as np
 
@@ -65,6 +67,7 @@ file_dialog_tag = "file_dialog_id"
 texture_tag = "texture_id"
 input_tag = "input_id"
 excluded_tag = "excluded_id"
+loading_tag = "loading_id"
 
 texture_registry = dpg.add_texture_registry()
 
@@ -139,12 +142,17 @@ def erase_frame():
 def process_frame():
     rect = select_region()
     process_frame = frame[rect[1]:rect[3], rect[0]:rect[2]]
+
+    dpg.show_item(loading_tag)
+
     text = str(pytesseract.image_to_string(
         process_frame, lang="ind+eng", config="--oem 1 --psm 6"))
     excluded = dpg.get_value(excluded_tag).splitlines()
     new_text = process_text(text, excluded)
     print(new_text)
     dpg.set_value(input_tag, dpg.get_value(input_tag) + new_text)
+
+    dpg.hide_item(loading_tag)
 
 
 with dpg.file_dialog(show=False, tag=file_dialog_tag, callback=open_file):
@@ -163,6 +171,8 @@ with dpg.window(label="Quiz Video OCR"):
     dpg.add_input_text(label="Excluded Lines",
                        multiline=True, tag=excluded_tag)
     dpg.add_input_text(label="Text", multiline=True, tag=input_tag)
+    dpg.add_loading_indicator(
+        label="Processing text...", show=False, tag=loading_tag)
 
 
 dpg.set_value(excluded_tag, "Select one:\nPilih salah satu:")
