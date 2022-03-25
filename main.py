@@ -16,37 +16,28 @@ def strip_lines(list: list):
     return lines
 
 
-def process_text(raw_text: str):
+def process_text(raw_text: str, excluded_list: list[str]):
     result = ""
     lines = strip_lines(raw_text.splitlines())
-    result += "Original text: \n" + "\n".join(lines) + "\n\n\n"
     question_line = []
     answers = []
     is_answer = False
     for line in lines:
-        if line.find("Select one") >= 0:
-            is_answer = True
+        if excluded_list.count(line):
             continue
+
+        word = re.split("\s+", line)
+        answer_index = None
+        first = word[0]
+        if len(first) == 2 and first.endswith("."):
+            alphabet = ["a", "b", "c", "d", "e", "f"]
+            if alphabet.count(first[0]) > 0:
+                is_answer = True
+                answer_index = first[0]
+
         if is_answer == False:
             question_line.append(line)
         if is_answer == True:
-            word = re.split("\s+", line)
-            answer_index = None
-            first = word[0]
-            if len(first) <= 3:
-                alphabet = ["a", "b", "c", "d", "e", "f"]
-                chars = []
-                if len(word) >= 2:
-                    chars.append(word[1][0])
-                if first[-1] == ".":
-                    chars.append(first[-2])
-                else:
-                    chars.append(first[-1])
-                for char in chars:
-                    count = alphabet.count(char)
-                    if count > 0:
-                        answer_index = char
-                        break
             if answer_index is not None:
                 pos = line.find(answer_index)
                 text = ""
@@ -62,7 +53,7 @@ def process_text(raw_text: str):
                 else:
                     answers[-1].append(line)
 
-    result += "Question: \n" + " ".join(question_line) + "\n"
+    result += " ".join(question_line) + "\n"
     for answer in answers:
         result += " ".join(answer) + "\n"
     return result
@@ -73,6 +64,7 @@ dpg.create_context()
 file_dialog_tag = "file_dialog_id"
 texture_tag = "texture_id"
 input_tag = "input_id"
+excluded_tag = "excluded_id"
 
 texture_registry = dpg.add_texture_registry()
 
@@ -149,7 +141,8 @@ def process_frame():
     process_frame = frame[rect[1]:rect[3], rect[0]:rect[2]]
     text = str(pytesseract.image_to_string(
         process_frame, lang="ind+eng", config="--oem 1 --psm 6"))
-    new_text = process_text(text)
+    excluded = dpg.get_value(excluded_tag).splitlines()
+    new_text = process_text(text, excluded)
     print(new_text)
     dpg.set_value(input_tag, dpg.get_value(input_tag) + new_text)
 
@@ -167,7 +160,12 @@ with dpg.window(label="Quiz Video OCR"):
         dpg.add_button(label="Process", callback=process_frame)
         dpg.add_button(label='Next Second',
                        callback=lambda: jump_frame_msec(1000))
+    dpg.add_input_text(label="Excluded Lines",
+                       multiline=True, tag=excluded_tag)
     dpg.add_input_text(label="Text", multiline=True, tag=input_tag)
+
+
+dpg.set_value(excluded_tag, "Select one:\nPilih salah satu:")
 
 dpg.create_viewport()
 
