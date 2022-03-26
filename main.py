@@ -2,6 +2,8 @@ import dearpygui.dearpygui as dpg
 import cv2
 import pytesseract
 import re
+import os
+from datetime import datetime
 
 from scipy.__config__ import show
 import util
@@ -169,6 +171,16 @@ def process_frame():
     dpg.hide_item(loading_tag)
 
 
+def extract_image():
+    rect = select_region()
+    image = frame[rect[1]:rect[3], rect[0]:rect[2]]
+    now = datetime.now()
+    name = now.strftime("%d-%m-%Y %H-%M-%S") + ".png"
+    if not os.path.exists("image"):
+        os.makedirs("image")
+    cv2.imwrite("image/" + name, image)
+
+
 with dpg.file_dialog(show=False, tag=file_dialog_tag, callback=open_file):
     dpg.add_file_extension(".mp4")
 
@@ -180,6 +192,7 @@ with dpg.window(label="Quiz Video OCR"):
                        callback=lambda: jump_frame_msec(-1000))
         dpg.add_button(label="Erase", callback=erase_frame)
         dpg.add_button(label="Process", callback=process_frame)
+        dpg.add_button(label="Extract Image", callback=extract_image)
         dpg.add_button(label='Next Second',
                        callback=lambda: jump_frame_msec(1000))
         dpg.add_button(label="Resize Preview", callback=resize_preview)
