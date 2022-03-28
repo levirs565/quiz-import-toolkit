@@ -3,6 +3,7 @@ import cv2
 import pytesseract
 import re
 import os
+import json
 from datetime import datetime
 
 from scipy.__config__ import show
@@ -20,6 +21,17 @@ def strip_lines(list: list):
     return lines
 
 
+def analyze_answer_line(line: str):
+    first, more = re.split("\s+", line, maxsplit=1)
+    answer_index = None
+    if len(first) == 2 and first.endswith("."):
+        alphabet = ["a", "b", "c", "d", "e", "f"]
+        if alphabet.count(first[0]) > 0:
+            answer_index = first[0]
+
+    return (answer_index, more)
+
+
 def process_text(raw_text: str, excluded_list: list[str]):
     result = ""
     lines = strip_lines(raw_text.splitlines())
@@ -30,14 +42,9 @@ def process_text(raw_text: str, excluded_list: list[str]):
         if excluded_list.count(line):
             continue
 
-        word = re.split("\s+", line)
-        answer_index = None
-        first = word[0]
-        if len(first) == 2 and first.endswith("."):
-            alphabet = ["a", "b", "c", "d", "e", "f"]
-            if alphabet.count(first[0]) > 0:
-                is_answer = True
-                answer_index = first[0]
+        answer_index, _ = analyze_answer_line(line)
+        if answer_index != None:
+            is_answer = True
 
         if is_answer == False:
             question_line.append(line)
@@ -181,6 +188,35 @@ def extract_image():
     cv2.imwrite("image/" + name, image)
 
 
+def export_to_quizx():
+    text = strip_lines(dpg.get_value(input_tag).splitlines())
+    question_list = []
+    for line in text:
+        answer_index, answer = analyze_answer_line(line)
+        if answer_index == None:
+            question_list.append({
+                "type": "short-text",
+                "question": line,
+                "answer": ""
+            })
+        else:
+            question = question_list[-1]
+            choices = question.get("choices", [])
+            choices.append(answer)
+            question["choices"] = choices
+            question["type"] = "multiple-choice"
+            question["answer"] = 0
+
+    quiz = {
+        "title": "",
+        "questions": question_list
+    }
+    raw = json.dumps(quiz, indent=4)
+
+    with dpg.window(label="QuizX Json"):
+        dpg.add_input_text(default_value=raw, multiline=True, readonly=True)
+
+
 with dpg.file_dialog(show=False, tag=file_dialog_tag, callback=open_file):
     dpg.add_file_extension(".mp4")
 
@@ -196,6 +232,7 @@ with dpg.window(label="Quiz Video OCR"):
         dpg.add_button(label='Next Second',
                        callback=lambda: jump_frame_msec(1000))
         dpg.add_button(label="Resize Preview", callback=resize_preview)
+        dpg.add_button(label="Export to QuizX", callback=export_to_quizx)
     dpg.add_input_text(label="Excluded Lines",
                        multiline=True, tag=excluded_tag)
     dpg.add_input_text(label="Text", multiline=True, tag=input_tag)
