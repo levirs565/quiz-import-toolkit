@@ -75,12 +75,14 @@ def process_text(raw_text: str, excluded_list: list[str]):
 
 dpg.create_context()
 
-file_dialog_tag = "file_dialog_id"
+video_file_dialog_tag = "file_dialog_id"
 texture_tag = "texture_id"
 preview_tag = "preview_id"
 input_tag = "input_id"
 excluded_tag = "excluded_id"
 loading_tag = "loading_id"
+video_nav_tag = "video_nav_id"
+frame_operation_tag = "frame_operation_id"
 
 texture_registry = dpg.add_texture_registry()
 
@@ -91,24 +93,25 @@ preview_size = (0, 0)
 cv_win = "Select Region"
 
 
-def open_file(sender, data):
+def open_video_file(sender, data):
     global vid_capture
     global frame_size
     global preview_size
 
-    print(data)
     vid_capture = cv2.VideoCapture(data['file_path_name'])
     frame_size = (
         int(vid_capture.get(cv2.CAP_PROP_FRAME_WIDTH)),
         int(vid_capture.get(cv2.CAP_PROP_FRAME_HEIGHT)))
     preview_size = frame_size
 
-    update_frame()
+    update_video_frame()
+    dpg.show_item(video_nav_tag)
+    dpg.show_item(frame_operation_tag)
 
 
 def show_preview():
     preview = cv2.resize(frame, preview_size)
-    preview_pos = (0, 0)
+    preview_pos = (350, 0)
     data = np.flip(preview, 2)
     data = data.ravel()
     data = np.asfarray(data, dtype='f')
@@ -130,7 +133,7 @@ def show_preview():
         dpg.add_image(texture_tag=texture_tag)
 
 
-def update_frame():
+def update_video_frame():
     global frame
     ret, frame = vid_capture.read()
     show_preview()
@@ -143,10 +146,10 @@ def resize_preview():
     show_preview()
 
 
-def jump_frame_msec(diff):
+def jump_video_frame_msec(diff):
     current_milis = vid_capture.get(cv2.CAP_PROP_POS_MSEC)
     vid_capture.set(cv2.CAP_PROP_POS_MSEC, current_milis + diff)
-    update_frame()
+    update_video_frame()
 
 
 def select_region():
@@ -220,30 +223,31 @@ def export_to_quizx():
         dpg.add_input_text(default_value=raw, multiline=True, readonly=True)
 
 
-with dpg.file_dialog(show=False, tag=file_dialog_tag, callback=open_file):
+with dpg.file_dialog(show=False, tag=video_file_dialog_tag, callback=open_video_file):
     dpg.add_file_extension(".mp4")
 
-with dpg.window(label="Quiz Video OCR"):
-    with dpg.group(horizontal=True):
-        dpg.add_button(label="Open",
-                       callback=lambda: dpg.show_item(file_dialog_tag))
-        dpg.add_button(label="Previous Second",
-                       callback=lambda: jump_frame_msec(-1000))
-        dpg.add_button(label="Erase", callback=erase_frame)
-        dpg.add_button(label="Process", callback=process_frame)
-        dpg.add_button(label="Extract Image", callback=extract_image)
-        dpg.add_button(label='Next Second',
-                       callback=lambda: jump_frame_msec(1000))
-        dpg.add_button(label="Resize Preview", callback=resize_preview)
+with dpg.window(label="Quiz OCR", autosize=True, min_size=(350, 0)):
+    dpg.add_button(label="Open Video",
+                   callback=lambda: dpg.show_item(video_file_dialog_tag))
+    with dpg.collapsing_header(label="Video Navigation", leaf=True, tag=video_nav_tag, show=False):
+        with dpg.group(horizontal=True):
+            dpg.add_button(label="Previous Second",
+                           callback=lambda: jump_video_frame_msec(-1000))
+            dpg.add_button(label='Next Second',
+                           callback=lambda: jump_video_frame_msec(1000))
+    with dpg.collapsing_header(label="Frame Operation", leaf=True, tag=frame_operation_tag, show=False):
+        with dpg.group(horizontal=True):
+            dpg.add_button(label="Erase", callback=erase_frame)
+            dpg.add_button(label="Process", callback=process_frame)
+            dpg.add_button(label="Extract Image", callback=extract_image)
+            dpg.add_button(label="Resize Preview", callback=resize_preview)
+    with dpg.collapsing_header(label="Quiz", leaf=True):
         dpg.add_button(label="Export to QuizX", callback=export_to_quizx)
-    dpg.add_input_text(label="Excluded Lines",
-                       multiline=True, tag=excluded_tag)
-    dpg.add_input_text(label="Text", multiline=True, tag=input_tag)
-    dpg.add_loading_indicator(
-        label="Processing text...", show=False, tag=loading_tag)
-
-
-dpg.set_value(excluded_tag, "Select one:\nPilih salah satu:")
+        dpg.add_input_text(label="Excluded Lines", default_value="Select one:\nPilih salah satu:",
+                           multiline=True, tag=excluded_tag)
+        dpg.add_input_text(label="Text", multiline=True, tag=input_tag)
+        dpg.add_loading_indicator(
+            label="Processing text...", show=False, tag=loading_tag)
 
 dpg.create_viewport()
 
