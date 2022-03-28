@@ -22,7 +22,10 @@ def strip_lines(list: list):
 
 
 def analyze_answer_line(line: str):
-    first, more = re.split("\s+", line, maxsplit=1)
+    word = re.split("\s+", line, maxsplit=1)
+    if len(word) != 2:
+        return (None, None)
+    first, more = word
     answer_index = None
     if len(first) == 2 and first.endswith("."):
         alphabet = ["a", "b", "c", "d", "e", "f"]
