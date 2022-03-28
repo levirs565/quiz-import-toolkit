@@ -75,6 +75,7 @@ def process_text(raw_text: str, excluded_list: list[str]):
 
 dpg.create_context()
 
+picture_file_dialog_tag = "picture_file_dialog_id"
 video_file_dialog_tag = "file_dialog_id"
 texture_tag = "texture_id"
 preview_tag = "preview_id"
@@ -92,11 +93,31 @@ frame_size = (0, 0)
 preview_size = (0, 0)
 cv_win = "Select Region"
 
+def reset_layout():
+    dpg.hide_item(video_nav_tag)
+    dpg.hide_item(frame_operation_tag)
+
+def open_picture_file(sender, data):
+    global frame
+    global frame_size
+    global preview_size
+
+    reset_layout()
+
+    frame = cv2.imread(data['file_path_name'])
+    img_h, img_w, c = frame.shape
+    frame_size = (img_w, img_h)
+    preview_size = frame_size
+
+    show_preview()
+    dpg.show_item(frame_operation_tag)
 
 def open_video_file(sender, data):
     global vid_capture
     global frame_size
     global preview_size
+
+    reset_layout()
 
     vid_capture = cv2.VideoCapture(data['file_path_name'])
     frame_size = (
@@ -223,12 +244,19 @@ def export_to_quizx():
         dpg.add_input_text(default_value=raw, multiline=True, readonly=True)
 
 
+with dpg.file_dialog(show=False, tag=picture_file_dialog_tag, callback=open_picture_file):
+    dpg.add_file_extension(".jpg")
+    dpg.add_file_extension(".png")
+
 with dpg.file_dialog(show=False, tag=video_file_dialog_tag, callback=open_video_file):
     dpg.add_file_extension(".mp4")
 
 with dpg.window(label="Quiz OCR", autosize=True, min_size=(350, 0)):
-    dpg.add_button(label="Open Video",
-                   callback=lambda: dpg.show_item(video_file_dialog_tag))
+    with dpg.group(horizontal=True):
+        dpg.add_button(label="Open Picture",
+                       callback=lambda: dpg.show_item(picture_file_dialog_tag))
+        dpg.add_button(label="Open Video",
+                       callback=lambda: dpg.show_item(video_file_dialog_tag))
     with dpg.collapsing_header(label="Video Navigation", leaf=True, tag=video_nav_tag, show=False):
         with dpg.group(horizontal=True):
             dpg.add_button(label="Previous Second",
