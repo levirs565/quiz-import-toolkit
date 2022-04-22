@@ -288,7 +288,7 @@ def export_to_quizx():
             question_list.append({
                 "type": "short-text",
                 "question": question,
-                "answer": ""
+                "answer": "E"
             })
             is_question = True
             is_answer = False
