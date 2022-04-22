@@ -63,6 +63,7 @@ preview_tag = "preview_id"
 input_tag = "input_id"
 excluded_tag = "excluded_id"
 loading_tag = "loading_id"
+pdf_nav_tag = "pdf_nav_id"
 video_nav_tag = "video_nav_id"
 frame_operation_tag = "frame_operation_id"
 
@@ -80,6 +81,7 @@ cv_win = "Select Region"
 def reset_layout():
     dpg.hide_item(video_nav_tag)
     dpg.hide_item(frame_operation_tag)
+    dpg.hide_item(pdf_nav_tag)
 
 
 def open_picture_file(sender, data):
@@ -111,6 +113,7 @@ def open_pdf_file(sender, data):
 
     update_pdf_page()
     dpg.show_item(frame_operation_tag)
+    dpg.show_item(pdf_nav_tag)
 
 
 def open_video_file(sender, data):
@@ -159,7 +162,7 @@ def update_pdf_page():
     global frame
     global frame_size
     global preview_size
-    page = pdf_file.load_page(0)
+    page = pdf_file.load_page(pdf_page_number)
     pixmap = page.get_pixmap(alpha=False, dpi=144)
     frame_size = (pixmap.w, pixmap.h)
     if preview_size == (0, 0):
@@ -181,6 +184,15 @@ def resize_preview():
     preview_size = util.calculate_image_contain_size(
         frame, (dpg.get_item_width(preview_tag), dpg.get_item_height(preview_tag)))
     show_preview()
+
+
+def jump_pdf_page(diff):
+    global pdf_page_number
+    new_page = pdf_page_number + diff
+    if new_page < 0 or new_page >= pdf_file.page_count:
+        return
+    pdf_page_number = new_page
+    update_pdf_page()
 
 
 def jump_video_frame_msec(diff):
@@ -333,6 +345,12 @@ with dpg.window(label="Quiz OCR", autosize=True, min_size=(350, 0)):
                            callback=lambda: jump_video_frame_msec(-1000))
             dpg.add_button(label='Next Second',
                            callback=lambda: jump_video_frame_msec(1000))
+    with dpg.collapsing_header(label="PDF Navigation", leaf=True, tag=pdf_nav_tag, show=False):
+        with dpg.group(horizontal=True):
+            dpg.add_button(label="Previous Page",
+                           callback=lambda: jump_pdf_page(-1))
+            dpg.add_button(label="Next Page",
+                           callback=lambda: jump_pdf_page(1))
     with dpg.collapsing_header(label="Frame Operation", leaf=True, tag=frame_operation_tag, show=False):
         with dpg.group(horizontal=True):
             dpg.add_button(label="Erase", callback=erase_frame)
