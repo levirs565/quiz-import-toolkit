@@ -37,6 +37,22 @@ def analyze_answer_line(line: str):
     return (answer_index, more)
 
 
+def analyze_question_index(line: str):
+    word = re.split("\s+", line, maxsplit=1)
+    if len(word) != 2:
+        return (None, None)
+    first, more = word
+    dot_index = first.find(".")
+    question_index = None
+    if dot_index > 0:
+        number_str = first[:dot_index]
+        try:
+            question_index = int(number_str)
+        except:
+            pass
+    return (question_index, more)
+
+
 dpg.create_context()
 
 picture_file_dialog_tag = "picture_file_dialog_id"
@@ -251,21 +267,37 @@ def extract_image():
 def export_to_quizx():
     text = strip_lines(dpg.get_value(input_tag).splitlines())
     question_list = []
+    is_question = False
+    is_answer = False
     for line in text:
         answer_index, answer = analyze_answer_line(line)
-        if answer_index == None:
+        question_index, question = analyze_question_index(line)
+        if question_index != None:
             question_list.append({
                 "type": "short-text",
-                "question": line,
+                "question": question,
                 "answer": ""
             })
-        else:
+            is_question = True
+            is_answer = False
+        elif answer_index != None:
             question = question_list[-1]
             choices = question.get("choices", [])
             choices.append(answer)
             question["choices"] = choices
             question["type"] = "multiple-choice"
             question["answer"] = 0
+
+            is_answer = True
+            is_question = False
+        elif is_question:
+            question_list[-1]["question"] += "\n" + line
+        elif is_answer:
+            question_list[-1]["choices"][-1] += "\n" + line
+        else:
+            print(answer_index, answer)
+            print(question_index, question_index)
+            raise Exception("Unknown condition")
 
     quiz = {
         "title": "",
