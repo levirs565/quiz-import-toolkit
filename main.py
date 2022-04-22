@@ -4,6 +4,7 @@ import pytesseract
 import re
 import os
 import json
+import fitz
 from datetime import datetime
 
 from scipy.__config__ import show
@@ -76,7 +77,8 @@ def process_text(raw_text: str, excluded_list: list[str]):
 dpg.create_context()
 
 picture_file_dialog_tag = "picture_file_dialog_id"
-video_file_dialog_tag = "file_dialog_id"
+pdf_file_dialog_tag = "pdf_file_dialog_id"
+video_file_dialog_tag = "video_file_dialog_id"
 texture_tag = "texture_id"
 preview_tag = "preview_id"
 input_tag = "input_id"
@@ -88,14 +90,18 @@ frame_operation_tag = "frame_operation_id"
 texture_registry = dpg.add_texture_registry()
 
 vid_capture = None
+pdf_file = None
+pdf_page_number = 0
 frame = None
 frame_size = (0, 0)
 preview_size = (0, 0)
 cv_win = "Select Region"
 
+
 def reset_layout():
     dpg.hide_item(video_nav_tag)
     dpg.hide_item(frame_operation_tag)
+
 
 def open_picture_file(sender, data):
     global frame
@@ -111,6 +117,22 @@ def open_picture_file(sender, data):
 
     show_preview()
     dpg.show_item(frame_operation_tag)
+
+
+def open_pdf_file(sender, data):
+    global pdf_file
+    global pdf_page_number
+    global preview_size
+
+    reset_layout()
+
+    pdf_file = fitz.Document(data['file_path_name'])
+    pdf_page_number = 0
+    preview_size = (0, 0)
+
+    update_pdf_page()
+    dpg.show_item(frame_operation_tag)
+
 
 def open_video_file(sender, data):
     global vid_capture
@@ -152,6 +174,21 @@ def show_preview():
 
     with dpg.window(label="Preview", tag=preview_tag, pos=preview_pos):
         dpg.add_image(texture_tag=texture_tag)
+
+
+def update_pdf_page():
+    global frame
+    global frame_size
+    global preview_size
+    page = pdf_file.load_page(0)
+    pixmap = page.get_pixmap(alpha=False, dpi=144)
+    frame_size = (pixmap.w, pixmap.h)
+    if preview_size == (0, 0):
+        preview_size = frame_size
+    frame = np.frombuffer(pixmap.samples, dtype=np.uint8).reshape(
+        pixmap.h, pixmap.w, pixmap.n)
+    frame = np.ascontiguousarray(frame[..., [2, 1, 0]])
+    show_preview()
 
 
 def update_video_frame():
@@ -248,6 +285,9 @@ with dpg.file_dialog(show=False, tag=picture_file_dialog_tag, callback=open_pict
     dpg.add_file_extension(".jpg")
     dpg.add_file_extension(".png")
 
+with dpg.file_dialog(show=False, tag=pdf_file_dialog_tag, callback=open_pdf_file):
+    dpg.add_file_extension('.pdf')
+
 with dpg.file_dialog(show=False, tag=video_file_dialog_tag, callback=open_video_file):
     dpg.add_file_extension(".mp4")
 
@@ -255,6 +295,8 @@ with dpg.window(label="Quiz OCR", autosize=True, min_size=(350, 0)):
     with dpg.group(horizontal=True):
         dpg.add_button(label="Open Picture",
                        callback=lambda: dpg.show_item(picture_file_dialog_tag))
+        dpg.add_button(label="Open PDF",
+                       callback=lambda: dpg.show_item(pdf_file_dialog_tag))
         dpg.add_button(label="Open Video",
                        callback=lambda: dpg.show_item(video_file_dialog_tag))
     with dpg.collapsing_header(label="Video Navigation", leaf=True, tag=video_nav_tag, show=False):
