@@ -1,3 +1,4 @@
+from math import floor
 import dearpygui.dearpygui as dpg
 import cv2
 import pytesseract
@@ -34,44 +35,6 @@ def analyze_answer_line(line: str):
             answer_index = first[0]
 
     return (answer_index, more)
-
-
-def process_text(raw_text: str, excluded_list: list[str]):
-    result = ""
-    lines = strip_lines(raw_text.splitlines())
-    question_line = []
-    answers = []
-    is_answer = False
-    for line in lines:
-        if excluded_list.count(line):
-            continue
-
-        answer_index, _ = analyze_answer_line(line)
-        if answer_index != None:
-            is_answer = True
-
-        if is_answer == False:
-            question_line.append(line)
-        if is_answer == True:
-            if answer_index is not None:
-                pos = line.find(answer_index)
-                text = ""
-                if line[pos+1] == ".":
-                    text = line[pos+2:].strip()
-                else:
-                    text = line[pos+1:].strip()
-
-                answers.append([answer_index + ". " + text])
-            else:
-                if len(answers) == 0:
-                    answers.append([line])
-                else:
-                    answers[-1].append(line)
-
-    result += " ".join(question_line) + "\n"
-    for answer in answers:
-        result += " ".join(answer) + "\n"
-    return result
 
 
 dpg.create_context()
@@ -227,16 +190,49 @@ def erase_frame():
 
 
 def process_frame():
+    excluded = dpg.get_value(excluded_tag).splitlines()
+
     rect = select_region()
     process_frame = frame[rect[1]:rect[3], rect[0]:rect[2]]
 
     dpg.show_item(loading_tag)
 
-    text = str(pytesseract.image_to_string(
-        process_frame, lang="ind+eng", config="--oem 1 --psm 6"))
-    excluded = dpg.get_value(excluded_tag).splitlines()
-    new_text = process_text(text, excluded)
-    print(new_text)
+    data = pytesseract.image_to_data(
+        process_frame, lang="ind+eng", output_type=pytesseract.Output.DICT)
+    lines_words = []
+    last_block_num = 0
+    last_line_num = 0
+    last_right = 0
+    for i in range(len(data['text'])):
+        level = data['level'][i]
+        if level != 5:
+            continue
+        text = data['text'][i]
+        block_num = data['block_num'][i]
+        line_num = data['line_num'][i]
+        left = data['left'][i]
+        width = data['width'][i]
+        right = left + width
+
+        if block_num != last_block_num or line_num != last_line_num:
+            lines_words.append([text])
+        else:
+            char_width = width / len(text)
+            delta_pixel = left - last_right
+            delta_char = floor(delta_pixel / char_width)
+            if delta_char >= 4:
+                lines_words.append([text])
+            else:
+                lines_words[-1].append(text)
+
+        last_block_num = block_num
+        last_line_num = line_num
+        last_right = right
+
+    lines = map(lambda words: " ".join(words), lines_words)
+    lines = filter(lambda line: excluded.count(line) == 0, lines)
+    new_text = "\n".join(lines) + "\n"
+
     dpg.set_value(input_tag, dpg.get_value(input_tag) + new_text)
 
     dpg.hide_item(loading_tag)
